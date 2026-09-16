@@ -22,6 +22,13 @@ public sealed class Product
     public decimal MinPrice { get; set; }
     public decimal MaxPrice { get; set; }
     public bool IsOnSale { get; set; }
+    public string? Brand { get; set; }
+    public string Tags { get; set; } = "[]";
+    public string Attributes { get; set; } = "{}";
+    public int SalesCount { get; set; }
+    public decimal RatingAverage { get; set; }
+    public int ReviewCount { get; set; }
+    public bool IsRecommended { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public Category? Category { get; set; }

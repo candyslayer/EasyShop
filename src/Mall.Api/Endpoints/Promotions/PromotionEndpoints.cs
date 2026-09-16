@@ -16,7 +16,27 @@ public static class PromotionEndpoints
         group.MapPost("/flash-sale/reservations", ReserveFlashSaleAsync);
         group.MapPost("/distribution/activate", ActivateDistributorAsync);
         group.MapPost("/distribution/bind", BindDistributorAsync);
+        group.MapGet("/coupons", (HttpContext c, MarketingUseCases u, CancellationToken ct) => c.User.TryGetUserId(out var id) ? u.CouponsAsync(id, ct) : Task.FromResult(Array.Empty<CouponResponse>()));
+        group.MapPost("/coupons/{code}/claim", ClaimCouponAsync);
+        group.MapGet("/points", (HttpContext c, MarketingUseCases u, CancellationToken ct) => c.User.TryGetUserId(out var id) ? u.PointsAsync(id, ct) : Task.FromResult(new PointsResponse(0, 0)));
+        group.MapGet("/orders", (HttpContext c, MarketingUseCases u, CancellationToken ct) => c.User.TryGetUserId(out var id) ? u.PromotionOrdersAsync(id, ct) : Task.FromResult(Array.Empty<PromotionOrderResponse>()));
+        group.MapPost("/bargain/{activityId:long}/start", StartBargainAsync);
+        group.MapPost("/bargain/records/{recordId:long}/help", HelpBargainAsync);
+        endpoints.MapGet("/api/promotions/activities/{type}/{id:long}", (string type, long id, MarketingUseCases u, CancellationToken ct) => u.ActivityDetailAsync(type, id, ct)).AllowAnonymous().WithTags("Promotions");
         return endpoints;
+    }
+    private static async Task<IResult> ClaimCouponAsync(HttpContext c, string code, MarketingUseCases u, CancellationToken ct)
+    {
+        if (!c.User.TryGetUserId(out var id)) return TypedResults.Unauthorized();
+        var result = await u.ClaimCouponAsync(id, code, ct); return result.Value is null ? TypedResults.BadRequest(new ErrorResponse(result.Error!)) : TypedResults.Ok(result.Value);
+    }
+    private static async Task<IResult> StartBargainAsync(HttpContext c, long activityId, MarketingUseCases u, CancellationToken ct)
+    {
+        if (!c.User.TryGetUserId(out var id)) return TypedResults.Unauthorized(); var result = await u.StartBargainAsync(id, activityId, ct); return result.Value is null ? TypedResults.BadRequest(new ErrorResponse(result.Error!)) : TypedResults.Ok(result.Value);
+    }
+    private static async Task<IResult> HelpBargainAsync(HttpContext c, long recordId, MarketingUseCases u, CancellationToken ct)
+    {
+        if (!c.User.TryGetUserId(out var id)) return TypedResults.Unauthorized(); var result = await u.HelpBargainAsync(id, recordId, ct); return result.Value is null ? TypedResults.BadRequest(new ErrorResponse(result.Error!)) : TypedResults.Ok(result.Value);
     }
 
     private static async Task<IResult> CreateTeamAsync(HttpContext c, CreateGroupBuyTeamRequest request, PromotionUseCases u, CancellationToken ct)

@@ -52,11 +52,13 @@ public sealed class AdminUseCases(MallDbContext db)
     public async Task<AdminOrderResponse[]> OrdersAsync(CancellationToken cancellationToken) =>
         await db.Orders.AsNoTracking().OrderByDescending(x => x.CreatedAt).Select(x => new AdminOrderResponse(x.Id, x.OrderNo, x.UserId, x.Status, x.PayableAmount, x.CreatedAt)).ToArrayAsync(cancellationToken);
 
-    public async Task<bool> ShipOrderAsync(long id, CancellationToken cancellationToken)
+    public async Task<bool> ShipOrderAsync(long id, ShipOrderRequest request, CancellationToken cancellationToken)
     {
         var order = await db.Orders.SingleOrDefaultAsync(x => x.Id == id && x.Status == OrderStatus.Paid, cancellationToken);
         if (order is null) return false;
         order.Status = OrderStatus.Shipped; order.ShippedAt = DateTime.UtcNow; order.UpdatedAt = DateTime.UtcNow;
+        order.ShippingCompany = request.Company; order.TrackingNo = request.TrackingNo;
+        db.LogisticsTraces.Add(new LogisticsTrace { OrderId = id, Company = request.Company, TrackingNo = request.TrackingNo, Status = "SHIPPED", TraceJson = "[]", UpdatedAt = DateTime.UtcNow });
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }

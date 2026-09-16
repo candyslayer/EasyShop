@@ -37,13 +37,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AuthUseCases>();
         services.AddScoped<UserUseCases>();
         services.AddScoped<CatalogUseCases>();
+        services.AddScoped<FavoriteUseCases>();
         services.AddScoped<CartUseCases>();
         services.AddScoped<OrderUseCases>();
+        services.AddScoped<OrderExtraUseCases>();
         services.AddScoped<PaymentUseCases>();
         services.AddScoped<AdminUseCases>();
         services.AddScoped<PromotionUseCases>();
+        services.AddScoped<MarketingUseCases>();
+        services.AddHostedService<PaymentRecoveryWorker>();
         services.AddSingleton<CatalogCache>();
-        services.AddSingleton<IPaymentGateway, MockPaymentGateway>();
+        services.AddHttpClient<WeChatPayGateway>();
+        services.AddSingleton<IPaymentGateway>(sp =>
+        {
+            var mode = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PaymentOptions>>().Value.Mode;
+            return mode.Equals("wechat", StringComparison.OrdinalIgnoreCase) ? sp.GetRequiredService<WeChatPayGateway>() : new MockPaymentGateway();
+        });
         return services;
     }
 

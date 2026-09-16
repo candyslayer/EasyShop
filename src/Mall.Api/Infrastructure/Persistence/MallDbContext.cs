@@ -17,10 +17,17 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductSku> ProductSkus => Set<ProductSku>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+    public DbSet<ProductFavorite> ProductFavorites => Set<ProductFavorite>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<AfterSale> AfterSales => Set<AfterSale>();
+    public DbSet<LogisticsTrace> LogisticsTraces => Set<LogisticsTrace>();
+    public DbSet<OrderReview> OrderReviews => Set<OrderReview>();
+    public DbSet<FreightRule> FreightRules => Set<FreightRule>();
     public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+    public DbSet<PaymentRefund> PaymentRefunds => Set<PaymentRefund>();
+    public DbSet<PaymentReconciliation> PaymentReconciliations => Set<PaymentReconciliation>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
@@ -32,6 +39,18 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
     public DbSet<FlashSaleOrder> FlashSaleOrders => Set<FlashSaleOrder>();
     public DbSet<Distributor> Distributors => Set<Distributor>();
     public DbSet<DistributionCommission> DistributionCommissions => Set<DistributionCommission>();
+    public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<UserCoupon> UserCoupons => Set<UserCoupon>();
+    public DbSet<MemberPrice> MemberPrices => Set<MemberPrice>();
+    public DbSet<PointsAccount> PointsAccounts => Set<PointsAccount>();
+    public DbSet<PointsTransaction> PointsTransactions => Set<PointsTransaction>();
+    public DbSet<FullReductionRule> FullReductionRules => Set<FullReductionRule>();
+    public DbSet<BargainActivity> BargainActivities => Set<BargainActivity>();
+    public DbSet<BargainRecord> BargainRecords => Set<BargainRecord>();
+    public DbSet<PresaleActivity> PresaleActivities => Set<PresaleActivity>();
+    public DbSet<GiftRule> GiftRules => Set<GiftRule>();
+    public DbSet<LimitedDiscount> LimitedDiscounts => Set<LimitedDiscount>();
+    public DbSet<PromotionOrder> PromotionOrders => Set<PromotionOrder>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +91,7 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
             entity.Property(x => x.Id).UseIdentityByDefaultColumn();
             entity.Property(x => x.MinPrice).HasPrecision(18, 2);
             entity.Property(x => x.MaxPrice).HasPrecision(18, 2);
+            entity.Property(x => x.Tags).HasColumnType("jsonb"); entity.Property(x => x.Attributes).HasColumnType("jsonb"); entity.Property(x => x.RatingAverage).HasPrecision(4, 2);
             entity.HasIndex(x => new { x.CategoryId, x.IsOnSale });
             entity.HasOne(x => x.Category).WithMany(x => x.Products).HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -96,6 +116,12 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
             entity.Property(x => x.Id).UseIdentityByDefaultColumn();
             entity.HasIndex(x => new { x.ProductId, x.SortOrder });
             entity.HasOne(x => x.Product).WithMany(x => x.Images).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ProductFavorite>(entity =>
+        {
+            entity.ToTable("mall_product_favorite"); entity.HasKey(x => x.Id); entity.Property(x => x.Id).UseIdentityByDefaultColumn();
+            entity.HasIndex(x => new { x.UserId, x.ProductId }).IsUnique(); entity.HasIndex(x => new { x.UserId, x.CreatedAt });
+            entity.HasOne<Product>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CartItem>(entity =>
@@ -131,6 +157,10 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
             entity.HasIndex(x => x.OrderId);
             entity.HasOne(x => x.Order).WithMany(x => x.Items).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
         });
+        modelBuilder.Entity<AfterSale>(e => { e.ToTable("order_after_sale"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.Amount).HasPrecision(18,2); e.Property(x => x.Status).HasConversion<string>(); e.HasIndex(x => new { x.OrderId, x.Status }); });
+        modelBuilder.Entity<LogisticsTrace>(e => { e.ToTable("order_logistics_trace"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.HasIndex(x => x.OrderId).IsUnique(); });
+        modelBuilder.Entity<OrderReview>(e => { e.ToTable("order_review"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.HasIndex(x => new { x.OrderId, x.UserId }).IsUnique(); });
+        modelBuilder.Entity<FreightRule>(e => { e.ToTable("order_freight_rule"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.BaseAmount).HasPrecision(18,2); e.Property(x => x.FreeThreshold).HasPrecision(18,2); });
 
         modelBuilder.Entity<PaymentRecord>(entity =>
         {
@@ -142,6 +172,8 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
             entity.HasIndex(x => x.PaymentNo).IsUnique();
             entity.HasIndex(x => new { x.OrderId, x.Status });
         });
+        modelBuilder.Entity<PaymentRefund>(e => { e.ToTable("payment_refund"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.RefundAmount).HasPrecision(18,2); e.HasIndex(x => x.RefundNo).IsUnique(); e.HasIndex(x => new { x.OrderId, x.Status }); });
+        modelBuilder.Entity<PaymentReconciliation>(e => { e.ToTable("payment_reconciliation"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.TotalAmount).HasPrecision(18,2); e.HasIndex(x => new { x.TradeDate, x.Channel }).IsUnique(); });
 
         modelBuilder.Entity<Role>(entity =>
         {
@@ -211,5 +243,17 @@ public sealed class MallDbContext(DbContextOptions<MallDbContext> options) : DbC
             entity.ToTable("distribution_commission"); entity.HasKey(x => x.Id); entity.Property(x => x.Id).UseIdentityByDefaultColumn();
             entity.Property(x => x.Rate).HasPrecision(5, 4); entity.Property(x => x.Amount).HasPrecision(18, 2); entity.HasIndex(x => x.OrderId).IsUnique();
         });
+        modelBuilder.Entity<Coupon>(e => { e.ToTable("promotion_coupon"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.ThresholdAmount).HasPrecision(18,2); e.Property(x => x.DiscountAmount).HasPrecision(18,2); e.HasIndex(x => x.Code).IsUnique(); });
+        modelBuilder.Entity<UserCoupon>(e => { e.ToTable("promotion_user_coupon"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.HasIndex(x => new { x.CouponId, x.UserId, x.Status }); });
+        modelBuilder.Entity<MemberPrice>(e => { e.ToTable("promotion_member_price"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.Price).HasPrecision(18,2); e.HasIndex(x => new { x.UserId, x.SkuId, x.Enabled }); });
+        modelBuilder.Entity<PointsAccount>(e => { e.ToTable("promotion_points_account"); e.HasKey(x => x.UserId); });
+        modelBuilder.Entity<PointsTransaction>(e => { e.ToTable("promotion_points_transaction"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.HasIndex(x => new { x.UserId, x.CreatedAt }); });
+        modelBuilder.Entity<FullReductionRule>(e => { e.ToTable("promotion_full_reduction_rule"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.ThresholdAmount).HasPrecision(18,2); e.Property(x => x.ReductionAmount).HasPrecision(18,2); });
+        modelBuilder.Entity<BargainActivity>(e => { e.ToTable("promotion_bargain_activity"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.OriginalPrice).HasPrecision(18,2); e.Property(x => x.LowestPrice).HasPrecision(18,2); e.Property(x => x.StepAmount).HasPrecision(18,2); });
+        modelBuilder.Entity<BargainRecord>(e => { e.ToTable("promotion_bargain_record"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.CurrentPrice).HasPrecision(18,2); e.HasIndex(x => new { x.ActivityId, x.UserId }).IsUnique(); });
+        modelBuilder.Entity<PresaleActivity>(e => { e.ToTable("promotion_presale_activity"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.DepositAmount).HasPrecision(18,2); e.Property(x => x.FinalAmount).HasPrecision(18,2); });
+        modelBuilder.Entity<GiftRule>(e => { e.ToTable("promotion_gift_rule"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); });
+        modelBuilder.Entity<LimitedDiscount>(e => { e.ToTable("promotion_limited_discount"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.DiscountPrice).HasPrecision(18,2); });
+        modelBuilder.Entity<PromotionOrder>(e => { e.ToTable("promotion_order"); e.HasKey(x => x.Id); e.Property(x => x.Id).UseIdentityByDefaultColumn(); e.Property(x => x.Type).HasConversion<string>(); e.Property(x => x.Status).HasConversion<string>(); e.HasIndex(x => new { x.OrderId, x.Type }).IsUnique(); });
     }
 }

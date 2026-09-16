@@ -9,7 +9,13 @@ public sealed record ProductListItem(
     string? Subtitle,
     decimal MinPrice,
     decimal MaxPrice,
-    string? PrimaryImageUrl);
+    string? PrimaryImageUrl,
+    string? Brand,
+    string Tags,
+    int SalesCount,
+    decimal RatingAverage,
+    int ReviewCount,
+    bool IsRecommended);
 
 public sealed record ProductListResponse(int Page, int PageSize, int Total, ProductListItem[] Items);
 

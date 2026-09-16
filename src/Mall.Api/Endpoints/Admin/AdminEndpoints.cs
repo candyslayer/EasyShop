@@ -22,6 +22,6 @@ public static class AdminEndpoints
     private static async Task<IResult> SetProductSaleAsync(long id, bool onSale, AdminUseCases useCases, CancellationToken ct) =>
         await useCases.SetProductSaleAsync(id, onSale, ct) ? TypedResults.NoContent() : TypedResults.NotFound();
 
-    private static async Task<IResult> ShipOrderAsync(long id, AdminUseCases useCases, CancellationToken ct) =>
-        await useCases.ShipOrderAsync(id, ct) ? TypedResults.NoContent() : TypedResults.BadRequest();
+    private static async Task<IResult> ShipOrderAsync(long id, ShipOrderRequest request, AdminUseCases useCases, CancellationToken ct) =>
+        await useCases.ShipOrderAsync(id, request, ct) ? TypedResults.NoContent() : TypedResults.BadRequest();
 }

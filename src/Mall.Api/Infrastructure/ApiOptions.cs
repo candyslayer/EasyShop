@@ -34,4 +34,13 @@ public sealed class PaymentOptions
     public const string SectionName = "Payment";
     public string Mode { get; init; } = "mock";
     public string CallbackSecret { get; init; } = "development-payment-secret-change-me";
+    public string BaseUrl { get; init; } = "https://api.mch.weixin.qq.com";
+    public string MchId { get; init; } = string.Empty;
+    public string SerialNumber { get; init; } = string.Empty;
+    public string PrivateKeyPem { get; init; } = string.Empty;
+    public string ApiV3Key { get; init; } = string.Empty;
+    public string PlatformCertificatePem { get; init; } = string.Empty;
+    public string NotifyUrl { get; init; } = string.Empty;
+    public string RefundNotifyUrl { get; init; } = string.Empty;
+    public int PaymentTimeoutMinutes { get; init; } = 30;
 }

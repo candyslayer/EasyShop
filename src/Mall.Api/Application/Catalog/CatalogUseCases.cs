@@ -19,21 +19,35 @@ public sealed class CatalogUseCases(MallDbContext db, CatalogCache cache)
         return result;
     }
 
-    public async Task<ProductListResponse> GetProductsAsync(long? categoryId, string? keyword, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<ProductListResponse> GetProductsAsync(long? categoryId, long[]? categoryIds, string? keyword, string? brand, string? tag, string? attribute, decimal? minPrice, decimal? maxPrice, string? sort, int page, int pageSize, CancellationToken cancellationToken)
     {
         page = Math.Clamp(page, 1, 100_000);
         pageSize = Math.Clamp(pageSize, 1, 100);
-        var cacheKey = $"{categoryId?.ToString() ?? "all"}:{keyword?.Trim().ToLowerInvariant() ?? ""}:{page}:{pageSize}";
+        var cacheKey = $"{categoryId}:{string.Join(',', categoryIds ?? [])}:{keyword}:{brand}:{tag}:{attribute}:{minPrice}:{maxPrice}:{sort}:{page}:{pageSize}";
         var cached = await cache.GetProductsAsync(cacheKey, cancellationToken);
         if (cached is not null) return cached;
         var query = db.Products.AsNoTracking().Where(x => x.IsOnSale);
         if (categoryId is not null) query = query.Where(x => x.CategoryId == categoryId.Value);
+        if (categoryIds is { Length: > 0 }) query = query.Where(x => categoryIds.Contains(x.CategoryId));
         if (!string.IsNullOrWhiteSpace(keyword)) query = query.Where(x => EF.Functions.ILike(x.Name, $"%{keyword.Trim()}%"));
+        if (!string.IsNullOrWhiteSpace(brand)) query = query.Where(x => x.Brand == brand);
+        if (!string.IsNullOrWhiteSpace(tag)) query = query.Where(x => EF.Functions.ILike(x.Tags, $"%\"{tag.Trim()}\"%"));
+        if (!string.IsNullOrWhiteSpace(attribute)) query = query.Where(x => EF.Functions.ILike(x.Attributes, $"%{attribute.Trim()}%"));
+        if (minPrice is not null) query = query.Where(x => x.MaxPrice >= minPrice.Value);
+        if (maxPrice is not null) query = query.Where(x => x.MinPrice <= maxPrice.Value);
         var total = await query.CountAsync(cancellationToken);
-        var items = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+        var ordered = sort?.ToLowerInvariant() switch
+        {
+            "sales" => query.OrderByDescending(x => x.SalesCount).ThenByDescending(x => x.Id),
+            "price_asc" => query.OrderBy(x => x.MinPrice).ThenByDescending(x => x.Id),
+            "price_desc" => query.OrderByDescending(x => x.MaxPrice).ThenByDescending(x => x.Id),
+            "rating" => query.OrderByDescending(x => x.RatingAverage).ThenByDescending(x => x.ReviewCount),
+            _ => query.OrderByDescending(x => x.IsRecommended).ThenByDescending(x => x.SalesCount).ThenByDescending(x => x.RatingAverage).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+        };
+        var items = await ordered
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new ProductListItem(x.Id, x.CategoryId, x.Name, x.Subtitle, x.MinPrice, x.MaxPrice,
-                x.Images.Where(i => i.IsPrimary).Select(i => i.ImageUrl).FirstOrDefault()))
+                x.Images.Where(i => i.IsPrimary).Select(i => i.ImageUrl).FirstOrDefault(), x.Brand, x.Tags, x.SalesCount, x.RatingAverage, x.ReviewCount, x.IsRecommended))
             .ToArrayAsync(cancellationToken);
         var result = new ProductListResponse(page, pageSize, total, items);
         await cache.SetProductsAsync(cacheKey, result, cancellationToken);
