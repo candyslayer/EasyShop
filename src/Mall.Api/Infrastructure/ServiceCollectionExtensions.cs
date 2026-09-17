@@ -30,7 +30,9 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<MallDbContext>((serviceProvider, options) =>
         {
             var database = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DatabaseOptions>>().Value;
-            options.UseNpgsql(database.ConnectionString, npgsql => npgsql.EnableRetryOnFailure(3));
+            options
+                .UseNpgsql(database.ConnectionString, npgsql => npgsql.EnableRetryOnFailure(3))
+                .UseSnakeCaseNamingConvention();
         });
         services.AddHttpClient<IWeChatSessionClient, WeChatSessionClient>();
         services.AddSingleton<JwtTokenIssuer>();

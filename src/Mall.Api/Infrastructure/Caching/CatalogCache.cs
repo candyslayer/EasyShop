@@ -12,6 +12,7 @@ public sealed class CatalogCache(IDistributedCache cache, ILogger<CatalogCache> 
 
     public Task<CategoryResponse[]?> GetCategoriesAsync(CancellationToken ct) => GetAsync("catalog:categories", AppJsonSerializerContext.Default.CategoryResponseArray, ct);
     public Task SetCategoriesAsync(CategoryResponse[] value, CancellationToken ct) => SetAsync("catalog:categories", value, AppJsonSerializerContext.Default.CategoryResponseArray, ct);
+    public Task InvalidateCategoriesAsync(CancellationToken ct) => cache.RemoveAsync("catalog:categories", ct);
     public Task<ProductListResponse?> GetProductsAsync(string key, CancellationToken ct) => GetAsync($"catalog:products:{key}", AppJsonSerializerContext.Default.ProductListResponse, ct);
     public Task SetProductsAsync(string key, ProductListResponse value, CancellationToken ct) => SetAsync($"catalog:products:{key}", value, AppJsonSerializerContext.Default.ProductListResponse, ct);
     public Task<ProductDetailResponse?> GetProductAsync(long id, CancellationToken ct) => GetAsync($"catalog:product:{id}", AppJsonSerializerContext.Default.ProductDetailResponse, ct);

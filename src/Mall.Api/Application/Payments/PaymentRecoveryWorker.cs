@@ -11,7 +11,9 @@ public sealed class PaymentRecoveryWorker(IServiceScopeFactory scopes, IOptions<
     private readonly PaymentOptions config = options.Value;
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
@@ -20,9 +22,35 @@ public sealed class PaymentRecoveryWorker(IServiceScopeFactory scopes, IOptions<
                 var payments = await db.PaymentRecords.Where(x => x.Status == PaymentStatus.Created && (x.LastQueriedAt == null || x.LastQueriedAt < now.AddMinutes(-2))).Take(100).ToArrayAsync(stoppingToken);
                 foreach (var payment in payments)
                 {
-                    if (payment.CreatedAt < now.AddMinutes(-config.PaymentTimeoutMinutes)) { await gateway.CloseAsync(payment.PaymentNo, stoppingToken); payment.Status = PaymentStatus.Closed; payment.UpdatedAt = now; continue; }
-                    try { var state = await gateway.QueryAsync(payment.PaymentNo, stoppingToken); payment.QueryAttempts++; payment.LastQueriedAt = now; if (state.Status == "SUCCESS") await paymentUseCases.SyncByPaymentNoAsync(payment.PaymentNo, stoppingToken); else { if (state.Status == "CLOSED") payment.Status = PaymentStatus.Closed; else if (state.Status == "PAYERROR") payment.Status = PaymentStatus.Failed; payment.UpdatedAt = now; } }
-                    catch (Exception ex) { payment.Status = PaymentStatus.Unknown; payment.LastQueriedAt = now; payment.UpdatedAt = now; logger.LogWarning(ex, "Payment recovery query failed for {PaymentNo}", payment.PaymentNo); }
+                    if (payment.CreatedAt < now.AddMinutes(-config.PaymentTimeoutMinutes)) 
+                        { 
+                            await gateway.CloseAsync(payment.PaymentNo, stoppingToken); 
+                            payment.Status = PaymentStatus.Closed; 
+                            payment.UpdatedAt = now; continue; 
+                        }
+                    try
+                        { 
+                            var state = await gateway.QueryAsync(payment.PaymentNo, stoppingToken); 
+                            payment.QueryAttempts++; 
+                            payment.LastQueriedAt = now; 
+                            if (state.Status == "SUCCESS") 
+                                await paymentUseCases.SyncByPaymentNoAsync(payment.PaymentNo, stoppingToken); 
+                            else { 
+                                if (state.Status == "CLOSED") 
+                                    payment.Status = PaymentStatus.Closed; 
+                                else if (state.Status == "PAYERROR") 
+                                    payment.Status = PaymentStatus.Failed; 
+                                payment.UpdatedAt = now;
+                            } 
+                        }
+                    catch (Exception ex)
+                        { 
+                            payment.Status = PaymentStatus.Unknown; 
+                            payment.LastQueriedAt = now; 
+                            payment.UpdatedAt = now; 
+                            logger.LogWarning(ex, "Payment recovery query failed for {PaymentNo}", 
+                            payment.PaymentNo);
+                        }
                 }
                 var expired = await db.Orders.Include(x => x.Items).Where(x => x.Status == Mall.Api.Domain.Orders.OrderStatus.WaitPay && x.PaymentExpiredAt != null && x.PaymentExpiredAt < now).Take(100).ToArrayAsync(stoppingToken);
                 foreach (var order in expired)
@@ -36,6 +64,8 @@ public sealed class PaymentRecoveryWorker(IServiceScopeFactory scopes, IOptions<
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
             catch (Exception ex) { logger.LogError(ex, "Payment recovery cycle failed"); }
+            }
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
 }

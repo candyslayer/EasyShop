@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Mall.Api.Domain.Orders;
 using Mall.Api.Domain.Payments;
 using Mall.Api.Domain.Promotions;
@@ -7,9 +5,10 @@ using Mall.Api.Infrastructure;
 using Mall.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Mall.Api.Domain.Users;
-using System.Text.Json;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
 
 namespace Mall.Api.Application.Payments;
 
@@ -41,7 +40,9 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
         if (payment is null) return null;
         if (payment.Status == PaymentStatus.Created)
         {
-            var result = await gateway.QueryAsync(payment.PaymentNo, ct); payment.QueryAttempts++; payment.LastQueriedAt = DateTime.UtcNow;
+            var result = await gateway.QueryAsync(payment.PaymentNo, ct); 
+            payment.QueryAttempts++; 
+            payment.LastQueriedAt = DateTime.UtcNow;
             if (result.Status == "SUCCESS")
             {
                 var callback = new PaymentCallbackRequest(payment.PaymentNo, true, result.TransactionId, string.Empty);
@@ -58,9 +59,18 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
     {
         var payment = await db.PaymentRecords.SingleOrDefaultAsync(x => x.PaymentNo == paymentNo && x.Status == PaymentStatus.Created, ct);
         if (payment is null) return;
-        var result = await gateway.QueryAsync(paymentNo, ct); payment.QueryAttempts++; payment.LastQueriedAt = DateTime.UtcNow;
-        if (result.Status == "SUCCESS") { var callback = new PaymentCallbackRequest(paymentNo, true, result.TransactionId, string.Empty); await HandleCallbackAsync(callback with { Signature = CreateCallbackSignature(callback) }, ct); }
-        else if (result.Status is "CLOSED" or "REVOKED") { payment.Status = PaymentStatus.Closed; payment.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(ct); }
+        var result = await gateway.QueryAsync(paymentNo, ct); 
+        payment.QueryAttempts++; 
+        payment.LastQueriedAt = DateTime.UtcNow;
+        if (result.Status == "SUCCESS")
+        { 
+            var callback = new PaymentCallbackRequest(paymentNo, true, result.TransactionId, string.Empty);
+            await HandleCallbackAsync(callback with { Signature = CreateCallbackSignature(callback) }, ct);
+        }
+        else if (result.Status is "CLOSED" or "REVOKED") 
+        { 
+            payment.Status = PaymentStatus.Closed; payment.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(ct);
+        }
         else await db.SaveChangesAsync(ct);
     }
 
@@ -69,9 +79,15 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
         var payment = await (from p in db.PaymentRecords join o in db.Orders on p.OrderId equals o.Id where p.OrderId == request.OrderId && o.UserId == userId && p.Status == PaymentStatus.Paid select p).SingleOrDefaultAsync(ct);
         if (payment is null) return (null, "没有可退款的已支付订单。");
         var amount = request.Amount ?? payment.Amount; if (amount <= 0 || amount > payment.Amount) return (null, "退款金额无效。");
-        var now = DateTime.UtcNow; var item = new PaymentRefund { PaymentId = payment.Id, OrderId = payment.OrderId, RefundNo = $"R{now:yyyyMMddHHmmssfff}{Random.Shared.Next(100000,999999)}", RefundAmount = amount, CreatedAt = now, UpdatedAt = now };
-        db.PaymentRefunds.Add(item); payment.Status = PaymentStatus.Refunding; payment.UpdatedAt = now; await db.SaveChangesAsync(ct);
-        var result = await gateway.RefundAsync(payment.PaymentNo, item.RefundNo, amount, ct); item.Status = result.Status; item.ExternalRefundNo = result.RefundId; item.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(ct);
+        var now = DateTime.UtcNow; 
+        var item = new PaymentRefund { PaymentId = payment.Id, OrderId = payment.OrderId, RefundNo = $"R{now:yyyyMMddHHmmssfff}{Random.Shared.Next(100000, 999999)}", RefundAmount = amount, CreatedAt = now, UpdatedAt = now };
+        db.PaymentRefunds.Add(item); 
+        payment.Status = PaymentStatus.Refunding; 
+        payment.UpdatedAt = now; 
+        await db.SaveChangesAsync(ct);
+        var result = await gateway.RefundAsync(payment.PaymentNo, item.RefundNo, amount, ct); 
+        item.Status = result.Status; item.ExternalRefundNo = result.RefundId; 
+        item.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(ct);
         return (new(item.Id, item.OrderId, item.RefundNo, item.RefundAmount, item.Status, item.ExternalRefundNo, item.CreatedAt), null);
     }
 
@@ -83,9 +99,9 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
     public async Task<PaymentResponse?> GetAsync(long userId, long id, CancellationToken cancellationToken)
     {
         var result = await (from payment in db.PaymentRecords.AsNoTracking()
-                             join order in db.Orders.AsNoTracking() on payment.OrderId equals order.Id
-                             where payment.Id == id && order.UserId == userId
-                             select new PaymentResponse(payment.Id, payment.OrderId, payment.PaymentNo, payment.Channel, payment.Status, payment.Amount, null, null, null, payment.CreatedAt, payment.PaidAt)).SingleOrDefaultAsync(cancellationToken);
+                            join order in db.Orders.AsNoTracking() on payment.OrderId equals order.Id
+                            where payment.Id == id && order.UserId == userId
+                            select new PaymentResponse(payment.Id, payment.OrderId, payment.PaymentNo, payment.Channel, payment.Status, payment.Amount, null, null, null, payment.CreatedAt, payment.PaidAt)).SingleOrDefaultAsync(cancellationToken);
         return result;
     }
 
@@ -110,15 +126,23 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
                 .ExecuteUpdateAsync(x => x.SetProperty(s => s.Stock, s => s.Stock - item.Quantity).SetProperty(s => s.LockedStock, s => s.LockedStock - item.Quantity), cancellationToken);
             if (affected != 1) { await transaction.RollbackAsync(cancellationToken); return false; }
         }
-        payment.Status = PaymentStatus.Paid; payment.ExternalTransactionNo = request.ExternalTransactionNo; payment.PaidAt = now; payment.UpdatedAt = now;
-        order.Status = OrderStatus.Paid; order.PaidAt = now; order.UpdatedAt = now;
+        payment.Status = PaymentStatus.Paid; payment.ExternalTransactionNo = request.ExternalTransactionNo;
+        payment.PaidAt = now;
+        payment.UpdatedAt = now;
+        order.Status = OrderStatus.Paid;
+        order.PaidAt = now; order.UpdatedAt = now;
         foreach (var grouped in order.Items.GroupBy(x => x.ProductId)) await db.Products.Where(x => x.Id == grouped.Key).ExecuteUpdateAsync(x => x.SetProperty(p => p.SalesCount, p => p.SalesCount + grouped.Sum(i => i.Quantity)).SetProperty(p => p.UpdatedAt, now), cancellationToken);
         var earnedPoints = (int)Math.Floor(order.PayableAmount);
         if (earnedPoints > 0)
         {
             var account = await db.PointsAccounts.SingleOrDefaultAsync(x => x.UserId == order.UserId, cancellationToken);
-            if (account is null) { account = new PointsAccount { UserId = order.UserId, Balance = earnedPoints, UpdatedAt = now }; db.PointsAccounts.Add(account); }
-            else { account.Balance += earnedPoints; account.UpdatedAt = now; }
+            if (account is null)
+            {
+                account = new PointsAccount { UserId = order.UserId, Balance = earnedPoints, UpdatedAt = now };
+                db.PointsAccounts.Add(account);
+            }
+            else
+            { account.Balance += earnedPoints; account.UpdatedAt = now; }
             db.PointsTransactions.Add(new PointsTransaction { UserId = order.UserId, Amount = earnedPoints, BalanceAfter = account.Balance, Type = "ORDER_EARN", OrderId = order.Id, CreatedAt = now });
         }
         var promotionOrder = await db.PromotionOrders.SingleOrDefaultAsync(x => x.OrderId == order.Id, cancellationToken);
@@ -140,9 +164,14 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
         if (!VerifyWechatSignature(body, timestamp, nonce, signature)) return false;
         using var document = JsonDocument.Parse(body); var resource = document.RootElement.GetProperty("resource");
         var cipher = Convert.FromBase64String(resource.GetProperty("ciphertext").GetString()!); var nonceBytes = Encoding.UTF8.GetBytes(resource.GetProperty("nonce").GetString()!); var aad = Encoding.UTF8.GetBytes(resource.GetProperty("associated_data").GetString()!);
-        var plain = new byte[cipher.Length - 16]; using var aes = new System.Security.Cryptography.AesGcm(Encoding.UTF8.GetBytes(_options.ApiV3Key), 16); aes.Decrypt(nonceBytes, cipher[..^16], cipher[^16..], plain, aad);
-        using var payload = JsonDocument.Parse(Encoding.UTF8.GetString(plain)); var root = payload.RootElement; var state = root.GetProperty("trade_state").GetString(); var paymentNo = root.GetProperty("out_trade_no").GetString()!;
-        var request = new PaymentCallbackRequest(paymentNo, state == "SUCCESS", root.TryGetProperty("transaction_id", out var transaction) ? transaction.GetString() : null, string.Empty); return await HandleCallbackAsync(request with { Signature = CreateCallbackSignature(request) }, ct);
+        var plain = new byte[cipher.Length - 16];
+        using var aes = new System.Security.Cryptography.AesGcm(Encoding.UTF8.GetBytes(_options.ApiV3Key), 16);
+        aes.Decrypt(nonceBytes, cipher[..^16], cipher[^16..], plain, aad);
+        using var payload = JsonDocument.Parse(Encoding.UTF8.GetString(plain));
+        var root = payload.RootElement; var state = root.GetProperty("trade_state").GetString();
+        var paymentNo = root.GetProperty("out_trade_no").GetString()!;
+        var request = new PaymentCallbackRequest(paymentNo, state == "SUCCESS", root.TryGetProperty("transaction_id", out var transaction) ? transaction.GetString() : null, string.Empty);
+        return await HandleCallbackAsync(request with { Signature = CreateCallbackSignature(request) }, ct);
     }
 
     private bool VerifyWechatSignature(string body, string timestamp, string nonce, string signature)
@@ -155,8 +184,14 @@ public sealed class PaymentUseCases(MallDbContext db, IPaymentGateway gateway, I
     private bool Verify(PaymentCallbackRequest request)
     {
         if (string.IsNullOrWhiteSpace(_options.CallbackSecret) || string.IsNullOrWhiteSpace(request.Signature)) return false;
-        try { return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(Sign(request)), Convert.FromHexString(request.Signature)); }
-        catch (FormatException) { return false; }
+        try 
+        { 
+            return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(Sign(request)), Convert.FromHexString(request.Signature)); 
+        }
+        catch (FormatException) 
+        { 
+            return false;
+        }
     }
 
     private string Sign(PaymentCallbackRequest request)
